@@ -94,7 +94,7 @@
             <span class="spinner" id="spinner"></span>
             <span id="btnText">Sign in with Passkey</span>
         </button>
-        <a href="/register.html" class="link">Don't have an account? Register</a>
+        <a id="registerLink" href="/register.html" class="link">Don't have an account? Register</a>
     </div>
 
     <script src="https://unpkg.com/@simplewebauthn/browser@11/dist/bundle/index.umd.min.js"></script>
@@ -105,6 +105,15 @@
             const params = new URLSearchParams(window.location.search);
             return params.get('returnUrl') || '/';
         }
+
+        // Pass returnUrl to register link so after registration it comes back
+        (function() {
+            const returnUrl = getReturnUrl();
+            if (returnUrl !== '/') {
+                document.getElementById('registerLink').href =
+                    '/register.html?returnUrl=' + encodeURIComponent(returnUrl);
+            }
+        })();
 
         function showError(msg) {
             const el = document.getElementById('error');
