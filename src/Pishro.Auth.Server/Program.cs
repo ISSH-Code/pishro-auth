@@ -80,11 +80,12 @@ using (var scope = app.Services.CreateScope())
     await seeder.SeedAsync();
 }
 
-// Trust reverse proxy headers (X-Forwarded-Proto, X-Forwarded-For)
-app.UseForwardedHeaders(new Microsoft.AspNetCore.HttpOverrides.ForwardedHeadersOptions
+// Trust reverse proxy: treat X-Forwarded-Proto as the real scheme
+app.Use(async (ctx, next) =>
 {
-    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
-                     | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto))
+        ctx.Request.Scheme = proto.ToString();
+    await next();
 });
 
 app.UseStaticFiles();
