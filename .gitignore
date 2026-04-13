@@ -1,1 +1,7 @@
-bin/\nobj/\n.vs/\n*.user\nnode_modules/\n.next/\n.claude/worktrees/
+bin/
+obj/
+.vs/
+*.user
+node_modules/
+.next/
+.claude/worktrees/
