@@ -64,6 +64,8 @@ builder.Services.AddFido2(options =>
         builder.Configuration.GetSection("Fido2:Origins").Get<string[]>() ?? ["http://localhost:5300"]);
 });
 
+builder.Services.AddAuthorization();
+
 builder.Services.AddScoped<IPasskeyService, PasskeyService>();
 builder.Services.AddScoped<ClientSeeder>();
 
