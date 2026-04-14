@@ -7,6 +7,9 @@ public class User : BaseEntity
     [MaxLength(50)]
     public string? DisplayName { get; private set; }
 
+    [MaxLength(50)]
+    public string? Nickname { get; private set; }
+
     [MaxLength(100)]
     public string? FirstName { get; private set; }
 
@@ -45,10 +48,12 @@ public class User : BaseEntity
         };
     }
 
-    public void Update(string? displayName = null, string? firstName = null, string? lastName = null,
-        string? email = null, string? phone = null, string? avatarUrl = null, string? bio = null)
+    public void Update(string? displayName = null, string? nickname = null, string? firstName = null,
+        string? lastName = null, string? email = null, string? phone = null,
+        string? avatarUrl = null, string? bio = null)
     {
         if (displayName is not null) DisplayName = displayName;
+        if (nickname is not null) Nickname = nickname;
         if (firstName is not null) FirstName = firstName;
         if (lastName is not null) LastName = lastName;
         if (email is not null) Email = email;

@@ -38,7 +38,7 @@ public class ClientSeeder(IOpenIddictApplicationManager manager)
             }, ct);
         }
 
-        // HRMS client
+        // HRMS client (includes roles + vetting_status scopes for authorization)
         if (await manager.FindByClientIdAsync("hrms", ct) is null)
         {
             await manager.CreateAsync(new OpenIddictApplicationDescriptor
@@ -61,7 +61,9 @@ public class ClientSeeder(IOpenIddictApplicationManager manager)
                     OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
                     OpenIddictConstants.Permissions.Scopes.Profile,
                     OpenIddictConstants.Permissions.Scopes.Email,
-                    OpenIddictConstants.Permissions.Scopes.Phone
+                    OpenIddictConstants.Permissions.Scopes.Phone,
+                    OpenIddictConstants.Permissions.Prefixes.Scope + "roles",
+                    OpenIddictConstants.Permissions.Prefixes.Scope + "vetting_status"
                 },
                 Requirements =
                 {

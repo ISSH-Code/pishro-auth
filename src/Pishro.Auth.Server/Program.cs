@@ -31,7 +31,7 @@ builder.Services.AddOpenIddict()
         options.AllowAuthorizationCodeFlow()
                .RequireProofKeyForCodeExchange();
 
-        options.RegisterScopes("openid", "profile", "email", "phone");
+        options.RegisterScopes("openid", "profile", "email", "phone", "roles", "vetting_status");
 
         // Dev signing credentials (replace with proper certs in production)
         options.AddDevelopmentEncryptionCertificate()
@@ -67,6 +67,8 @@ builder.Services.AddFido2(options =>
 builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IPasskeyService, PasskeyService>();
+builder.Services.AddScoped<IClaimsEnrichmentService, ClaimsEnrichmentService>();
+builder.Services.AddHttpClient("hrms-internal");
 builder.Services.AddScoped<ClientSeeder>();
 
 var app = builder.Build();

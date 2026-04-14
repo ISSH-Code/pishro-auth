@@ -6,16 +6,21 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
+using Pishro.Auth.Application.Services;
 using Pishro.Auth.Infrastructure.Persistence;
 
 namespace Pishro.Auth.Server.Endpoints;
 
 public static class ConnectEndpoints
 {
+    private const string RolesScope = "roles";
+    private const string VettingStatusScope = "vetting_status";
+
     public static void MapConnectEndpoints(this WebApplication app)
     {
         app.MapMethods("/connect/authorize", [HttpMethods.Get, HttpMethods.Post],
-            (Delegate)(async (HttpContext httpContext, AuthDbContext db) => await HandleAuthorize(httpContext, db)));
+            (Delegate)(async (HttpContext httpContext, AuthDbContext db, IClaimsEnrichmentService enrichment) =>
+                await HandleAuthorize(httpContext, db, enrichment)));
         app.MapPost("/connect/token",
             (Delegate)(async (HttpContext httpContext) => await HandleToken(httpContext)));
         app.MapMethods("/connect/userinfo", [HttpMethods.Get, HttpMethods.Post],
@@ -24,7 +29,8 @@ public static class ConnectEndpoints
             (Delegate)(async (HttpContext httpContext) => await HandleLogout(httpContext)));
     }
 
-    private static async Task<IResult> HandleAuthorize(HttpContext httpContext, AuthDbContext db)
+    private static async Task<IResult> HandleAuthorize(
+        HttpContext httpContext, AuthDbContext db, IClaimsEnrichmentService enrichment)
     {
         var request = httpContext.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
@@ -48,7 +54,7 @@ public static class ConnectEndpoints
         if (user is null)
             return Results.Redirect("/login.html");
 
-        // Create OpenIddict claims principal
+        // Build standard claims from the User entity
         var claims = new List<Claim>
         {
             new(OpenIddictConstants.Claims.Subject, user.Id.ToString())
@@ -56,6 +62,8 @@ public static class ConnectEndpoints
 
         if (!string.IsNullOrEmpty(user.DisplayName))
             claims.Add(new Claim(OpenIddictConstants.Claims.Name, user.DisplayName));
+        if (!string.IsNullOrEmpty(user.Nickname))
+            claims.Add(new Claim(OpenIddictConstants.Claims.Nickname, user.Nickname));
         if (!string.IsNullOrEmpty(user.Email))
         {
             claims.Add(new Claim(OpenIddictConstants.Claims.Email, user.Email));
@@ -72,6 +80,13 @@ public static class ConnectEndpoints
             claims.Add(new Claim(OpenIddictConstants.Claims.FamilyName, user.LastName));
         if (!string.IsNullOrEmpty(user.AvatarUrl))
             claims.Add(new Claim(OpenIddictConstants.Claims.Picture, user.AvatarUrl));
+
+        // Enrich with HRMS roles/vetting_status when those scopes are requested
+        if (request.HasScope(RolesScope) || request.HasScope(VettingStatusScope))
+        {
+            var enrichedClaims = await enrichment.GetEnrichedClaimsAsync(user.Id, httpContext.RequestAborted);
+            claims.AddRange(enrichedClaims);
+        }
 
         var identity = new ClaimsIdentity(claims, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
@@ -120,6 +135,9 @@ public static class ConnectEndpoints
         var name = claimsPrincipal.FindFirstValue(OpenIddictConstants.Claims.Name);
         if (name is not null) claims["name"] = name;
 
+        var nickname = claimsPrincipal.FindFirstValue(OpenIddictConstants.Claims.Nickname);
+        if (nickname is not null) claims["nickname"] = nickname;
+
         var givenName = claimsPrincipal.FindFirstValue(OpenIddictConstants.Claims.GivenName);
         if (givenName is not null) claims["given_name"] = givenName;
 
@@ -140,6 +158,16 @@ public static class ConnectEndpoints
 
         var phoneVerified = claimsPrincipal.FindFirstValue(OpenIddictConstants.Claims.PhoneNumberVerified);
         if (phoneVerified is not null) claims["phone_number_verified"] = phoneVerified == "true";
+
+        // Include enriched claims (roles, vetting_status)
+        var roles = claimsPrincipal.FindAll("role").Select(c => c.Value).ToArray();
+        if (roles.Length > 0) claims["roles"] = roles;
+
+        var vettingStatus = claimsPrincipal.FindFirstValue("vetting_status");
+        if (vettingStatus is not null) claims["vetting_status"] = vettingStatus;
+
+        var tenantId = claimsPrincipal.FindFirstValue("tenant_id");
+        if (tenantId is not null) claims["tenant_id"] = tenantId;
 
         return Results.Ok(claims);
     }
@@ -162,6 +190,7 @@ public static class ConnectEndpoints
             ],
 
             OpenIddictConstants.Claims.Name or
+            OpenIddictConstants.Claims.Nickname or
             OpenIddictConstants.Claims.GivenName or
             OpenIddictConstants.Claims.FamilyName or
             OpenIddictConstants.Claims.Picture
@@ -183,6 +212,22 @@ public static class ConnectEndpoints
                     OpenIddictConstants.Destinations.AccessToken,
                     OpenIddictConstants.Destinations.IdentityToken
                 ],
+
+            // HRMS-specific claims: roles, vetting_status, tenant_id
+            "role" when request.HasScope(RolesScope) => [
+                OpenIddictConstants.Destinations.AccessToken,
+                OpenIddictConstants.Destinations.IdentityToken
+            ],
+
+            "vetting_status" when request.HasScope(VettingStatusScope) || request.HasScope(RolesScope) => [
+                OpenIddictConstants.Destinations.AccessToken,
+                OpenIddictConstants.Destinations.IdentityToken
+            ],
+
+            "tenant_id" when request.HasScope(RolesScope) => [
+                OpenIddictConstants.Destinations.AccessToken,
+                OpenIddictConstants.Destinations.IdentityToken
+            ],
 
             _ => []
         };
