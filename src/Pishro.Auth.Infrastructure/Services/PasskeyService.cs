@@ -19,10 +19,10 @@ public class PasskeyService(
     private const string RegisterPrefix = "fido2:reg:";
     private const string LoginPrefix = "fido2:login:";
 
-    public async Task<object> BeginRegisterAsync(string displayName, CancellationToken ct)
+    public async Task<object> BeginRegisterAsync(string displayName, Guid? userId = null, CancellationToken ct = default)
     {
-        var userId = Guid.NewGuid();
-        var userHandle = userId.ToByteArray();
+        var effectiveUserId = userId ?? Guid.NewGuid();
+        var userHandle = effectiveUserId.ToByteArray();
 
         var user = new Fido2User
         {
@@ -43,7 +43,7 @@ public class PasskeyService(
         var optionsJson = options.ToJson();
 
         // Store userId alongside options so we can create the user on completion
-        var payload = JsonSerializer.Serialize(new { optionsJson, userId, displayName });
+        var payload = JsonSerializer.Serialize(new { optionsJson, userId = effectiveUserId, displayName });
         await cache.SetStringAsync(
             RegisterPrefix + challengeId,
             payload,
@@ -104,13 +104,16 @@ public class PasskeyService(
                 }
             }, ct);
 
-            // Create the user
-            var user = User.Create(displayName);
-            // Override the generated Id with the one we stored in the challenge
-            typeof(BaseEntity).GetProperty(nameof(BaseEntity.Id))!
-                .SetValue(user, userId);
-
-            db.Users.Add(user);
+            // Create the user unless one already exists for this Id (idempotent;
+            // handles HRMS invite handoffs and already-migrated users)
+            var existingUser = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+            if (existingUser is null)
+            {
+                var user = User.Create(displayName);
+                typeof(BaseEntity).GetProperty(nameof(BaseEntity.Id))!
+                    .SetValue(user, userId);
+                db.Users.Add(user);
+            }
 
             var credential = PasskeyCredential.Create(
                 userId: userId,

@@ -23,7 +23,7 @@ public static class AuthEndpoints
                 ? dn.GetString() ?? "User"
                 : "User";
 
-            var result = await passkeyService.BeginRegisterAsync(displayName, ct);
+            var result = await passkeyService.BeginRegisterAsync(displayName, ct: ct);
             return Results.Ok(result);
         });
 
@@ -59,6 +59,31 @@ public static class AuthEndpoints
             CancellationToken ct) =>
         {
             var result = await passkeyService.BeginLoginAsync(ct);
+            return Results.Ok(result);
+        });
+
+        // HRMS invite handoff: begin passkey registration using the identityId
+        // carried by an HMAC-signed handoff token. The token is issued by HRMS
+        // when claimInvite() succeeds and binds the user to a VerifiedIdentity
+        // that already exists in hrms_identity.
+        group.MapPost("/invite/begin", async (
+            JsonElement body,
+            IPasskeyService passkeyService,
+            IInviteHandoffService handoffService,
+            CancellationToken ct) =>
+        {
+            if (!body.TryGetProperty("handoff", out var handoffElement))
+                return Results.BadRequest(new { error = "Missing handoff" });
+
+            var token = handoffElement.GetString();
+            if (string.IsNullOrEmpty(token))
+                return Results.BadRequest(new { error = "Empty handoff token" });
+
+            var handoff = handoffService.Verify(token);
+            if (handoff is null)
+                return Results.BadRequest(new { error = "Invalid or expired handoff" });
+
+            var result = await passkeyService.BeginRegisterAsync(handoff.DisplayName, handoff.IdentityId, ct);
             return Results.Ok(result);
         });
 

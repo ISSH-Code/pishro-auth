@@ -68,6 +68,7 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IPasskeyService, PasskeyService>();
 builder.Services.AddScoped<IClaimsEnrichmentService, ClaimsEnrichmentService>();
+builder.Services.AddScoped<IInviteHandoffService, InviteHandoffService>();
 builder.Services.AddHttpClient("hrms-internal");
 builder.Services.AddScoped<ClientSeeder>();
 
