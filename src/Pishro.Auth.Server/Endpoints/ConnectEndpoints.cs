@@ -91,10 +91,15 @@ public static class ConnectEndpoints
         var identity = new ClaimsIdentity(claims, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
 
-        // Set destinations for each claim based on requested scopes
+        // Carry the granted scopes on the principal so HandleToken can compute
+        // destinations correctly. The token endpoint request has no `scope`
+        // parameter, so reading scopes off `request` there returns nothing and
+        // the id_token would only contain `sub`.
+        principal.SetScopes(request.GetScopes());
+
         foreach (var claim in principal.Claims)
         {
-            claim.SetDestinations(GetDestinations(claim, request));
+            claim.SetDestinations(GetDestinations(claim, principal));
         }
 
         return Results.SignIn(principal, authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
@@ -111,10 +116,11 @@ public static class ConnectEndpoints
             var principal = result.Principal
                 ?? throw new InvalidOperationException("The authorization code is no longer valid.");
 
-            // Set destinations for claims
+            // Recompute destinations from the principal's granted scopes
+            // (carried from HandleAuthorize via the authorization code).
             foreach (var claim in principal.Claims)
             {
-                claim.SetDestinations(GetDestinations(claim, request));
+                claim.SetDestinations(GetDestinations(claim, principal));
             }
 
             return Results.SignIn(principal, authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
@@ -180,7 +186,7 @@ public static class ConnectEndpoints
             [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]);
     }
 
-    private static ImmutableArray<string> GetDestinations(Claim claim, OpenIddictRequest request)
+    private static ImmutableArray<string> GetDestinations(Claim claim, ClaimsPrincipal principal)
     {
         return claim.Type switch
         {
@@ -194,37 +200,37 @@ public static class ConnectEndpoints
             OpenIddictConstants.Claims.GivenName or
             OpenIddictConstants.Claims.FamilyName or
             OpenIddictConstants.Claims.Picture
-                when request.HasScope(OpenIddictConstants.Scopes.Profile) => [
+                when principal.HasScope(OpenIddictConstants.Scopes.Profile) => [
                     OpenIddictConstants.Destinations.AccessToken,
                     OpenIddictConstants.Destinations.IdentityToken
                 ],
 
             OpenIddictConstants.Claims.Email or
             OpenIddictConstants.Claims.EmailVerified
-                when request.HasScope(OpenIddictConstants.Scopes.Email) => [
+                when principal.HasScope(OpenIddictConstants.Scopes.Email) => [
                     OpenIddictConstants.Destinations.AccessToken,
                     OpenIddictConstants.Destinations.IdentityToken
                 ],
 
             OpenIddictConstants.Claims.PhoneNumber or
             OpenIddictConstants.Claims.PhoneNumberVerified
-                when request.HasScope(OpenIddictConstants.Scopes.Phone) => [
+                when principal.HasScope(OpenIddictConstants.Scopes.Phone) => [
                     OpenIddictConstants.Destinations.AccessToken,
                     OpenIddictConstants.Destinations.IdentityToken
                 ],
 
             // HRMS-specific claims: roles, vetting_status, tenant_id
-            "role" when request.HasScope(RolesScope) => [
+            "role" when principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken
             ],
 
-            "vetting_status" when request.HasScope(VettingStatusScope) || request.HasScope(RolesScope) => [
+            "vetting_status" when principal.HasScope(VettingStatusScope) || principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken
             ],
 
-            "tenant_id" when request.HasScope(RolesScope) => [
+            "tenant_id" when principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken
             ],
