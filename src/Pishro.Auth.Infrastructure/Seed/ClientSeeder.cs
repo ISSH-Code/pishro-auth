@@ -63,38 +63,44 @@ public class ClientSeeder(
             }, ct);
         }
 
-        // HRMS client (includes roles + vetting_status scopes for authorization)
-        if (await manager.FindByClientIdAsync("hrms", ct) is null)
+        // HRMS client (includes roles + vetting_status scopes for authorization).
+        // The client descriptor is rewritten on every startup so permission/scope
+        // edits in source actually take effect — the original FindByClientIdAsync
+        // guard left old clients stuck with the seed-time permission set.
+        var hrmsDescriptor = new OpenIddictApplicationDescriptor
         {
-            await manager.CreateAsync(new OpenIddictApplicationDescriptor
+            ClientId = "hrms",
+            DisplayName = "HRMS ERP",
+            ClientType = OpenIddictConstants.ClientTypes.Public,
+            RedirectUris =
             {
-                ClientId = "hrms",
-                DisplayName = "HRMS ERP",
-                ClientType = OpenIddictConstants.ClientTypes.Public,
-                RedirectUris =
-                {
-                    new Uri("https://erp.pishro.party/api/auth/callback"),
-                    new Uri("http://localhost:3000/api/auth/callback")
-                },
-                Permissions =
-                {
-                    OpenIddictConstants.Permissions.Endpoints.Authorization,
-                    OpenIddictConstants.Permissions.Endpoints.Token,
-                    OpenIddictConstants.Permissions.Endpoints.EndSession,
-                    OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
-                    OpenIddictConstants.Permissions.ResponseTypes.Code,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
-                    OpenIddictConstants.Permissions.Scopes.Profile,
-                    OpenIddictConstants.Permissions.Scopes.Email,
-                    OpenIddictConstants.Permissions.Scopes.Phone,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + "roles",
-                    OpenIddictConstants.Permissions.Prefixes.Scope + "vetting_status"
-                },
-                Requirements =
-                {
-                    OpenIddictConstants.Requirements.Features.ProofKeyForCodeExchange
-                }
-            }, ct);
-        }
+                new Uri("https://erp.pishro.party/api/auth/callback"),
+                new Uri("http://localhost:3000/api/auth/callback")
+            },
+            Permissions =
+            {
+                OpenIddictConstants.Permissions.Endpoints.Authorization,
+                OpenIddictConstants.Permissions.Endpoints.Token,
+                OpenIddictConstants.Permissions.Endpoints.EndSession,
+                OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
+                OpenIddictConstants.Permissions.ResponseTypes.Code,
+                OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
+                OpenIddictConstants.Permissions.Scopes.Profile,
+                OpenIddictConstants.Permissions.Scopes.Email,
+                OpenIddictConstants.Permissions.Scopes.Phone,
+                OpenIddictConstants.Permissions.Prefixes.Scope + "roles",
+                OpenIddictConstants.Permissions.Prefixes.Scope + "vetting_status"
+            },
+            Requirements =
+            {
+                OpenIddictConstants.Requirements.Features.ProofKeyForCodeExchange
+            }
+        };
+
+        var existingHrms = await manager.FindByClientIdAsync("hrms", ct);
+        if (existingHrms is null)
+            await manager.CreateAsync(hrmsDescriptor, ct);
+        else
+            await manager.UpdateAsync(existingHrms, hrmsDescriptor, ct);
     }
 }
