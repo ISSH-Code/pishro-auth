@@ -77,6 +77,11 @@ public class ClientSeeder(
                 new Uri("https://erp.pishro.party/api/auth/callback"),
                 new Uri("http://localhost:3000/api/auth/callback")
             },
+            PostLogoutRedirectUris =
+            {
+                new Uri("https://erp.pishro.party/"),
+                new Uri("http://localhost:3000/")
+            },
             Permissions =
             {
                 OpenIddictConstants.Permissions.Endpoints.Authorization,
