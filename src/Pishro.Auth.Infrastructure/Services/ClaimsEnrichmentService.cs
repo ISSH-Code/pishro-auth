@@ -16,7 +16,7 @@ public class ClaimsEnrichmentService(
     IConfiguration configuration,
     ILogger<ClaimsEnrichmentService> logger) : IClaimsEnrichmentService
 {
-    private record RolesResponse(string[] Roles, string? VettingStatus, Guid? TenantId);
+    private record RolesResponse(string[] Roles, string? VettingStatus, Guid? TenantId, string[]? Permissions);
     private record VettingStatusResponse(string VettingStatus);
 
     public async Task<IReadOnlyList<Claim>> GetEnrichedClaimsAsync(Guid userId, CancellationToken ct = default)
@@ -45,6 +45,14 @@ public class ClaimsEnrichmentService(
                     foreach (var role in rolesResponse.Roles)
                     {
                         claims.Add(new Claim("role", role));
+                    }
+
+                    if (rolesResponse.Permissions is { Length: > 0 })
+                    {
+                        foreach (var perm in rolesResponse.Permissions)
+                        {
+                            claims.Add(new Claim("permission", perm));
+                        }
                     }
 
                     if (rolesResponse.TenantId is not null)

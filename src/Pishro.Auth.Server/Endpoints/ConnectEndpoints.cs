@@ -219,8 +219,13 @@ public static class ConnectEndpoints
                     OpenIddictConstants.Destinations.IdentityToken
                 ],
 
-            // HRMS-specific claims: roles, vetting_status, tenant_id
+            // HRMS-specific claims: roles, permissions, vetting_status, tenant_id
             "role" when principal.HasScope(RolesScope) => [
+                OpenIddictConstants.Destinations.AccessToken,
+                OpenIddictConstants.Destinations.IdentityToken
+            ],
+
+            "permission" when principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken
             ],
