@@ -225,7 +225,7 @@ public static class ConnectEndpoints
                 OpenIddictConstants.Destinations.IdentityToken
             ],
 
-            "permission" when principal.HasScope(RolesScope) => [
+            "hrms_access" when principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken
             ],

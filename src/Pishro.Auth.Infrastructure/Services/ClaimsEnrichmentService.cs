@@ -47,12 +47,17 @@ public class ClaimsEnrichmentService(
                         claims.Add(new Claim("role", role));
                     }
 
-                    if (rolesResponse.Permissions is { Length: > 0 })
+                    // Emit a single boolean `hrms_access` claim rather than the
+                    // full permission list. The super-admin role has ~160 permissions
+                    // which bloats the id_token past nginx's 4 KB upstream buffer
+                    // (causing 502 on the callback). Fine-grained checks should
+                    // query /api/iam/internal/roles server-side when needed.
+                    var hasBackofficeAccess = rolesResponse.Permissions is { Length: > 0 } &&
+                        rolesResponse.Permissions.Any(p =>
+                            string.Equals(p, "hrms.backoffice:access", StringComparison.OrdinalIgnoreCase));
+                    if (hasBackofficeAccess)
                     {
-                        foreach (var perm in rolesResponse.Permissions)
-                        {
-                            claims.Add(new Claim("permission", perm));
-                        }
+                        claims.Add(new Claim("hrms_access", "true"));
                     }
 
                     if (rolesResponse.TenantId is not null)
