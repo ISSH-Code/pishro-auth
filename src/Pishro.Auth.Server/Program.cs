@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Pishro.Auth.Application.Services;
 using Pishro.Auth.Infrastructure.Persistence;
@@ -88,6 +90,44 @@ app.Use(async (ctx, next) =>
 {
     if (ctx.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto))
         ctx.Request.Scheme = proto.ToString();
+    await next();
+});
+
+// Handle `prompt=register` before OpenIddict validates it (ID2032 "prompt not
+// supported"). If the user is already signed in, the authorize flow continues
+// normally after we strip the prompt. Otherwise we short-circuit to the
+// registration page with the full authorize URL as returnUrl so it completes
+// the code flow after registration.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.Equals("/connect/authorize", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(ctx.Request.Query["prompt"], "register", StringComparison.OrdinalIgnoreCase))
+    {
+        var cookieResult = await ctx.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        if (!cookieResult.Succeeded)
+        {
+            // Build returnUrl = same authorize URL minus the unsupported prompt.
+            var rebuilt = new List<string>();
+            foreach (var kv in ctx.Request.Query)
+            {
+                if (string.Equals(kv.Key, "prompt", StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var v in kv.Value)
+                    rebuilt.Add($"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(v ?? string.Empty)}");
+            }
+            var returnUrl = "/connect/authorize?" + string.Join("&", rebuilt);
+            ctx.Response.Redirect($"/register.html?returnUrl={Uri.EscapeDataString(returnUrl)}");
+            return;
+        }
+
+        // Already signed in: drop the prompt and let OpenIddict proceed.
+        var filtered = ctx.Request.Query
+            .Where(kv => !string.Equals(kv.Key, "prompt", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        ctx.Request.Query = new QueryCollection(filtered);
+        ctx.Request.QueryString = QueryString.Create(
+            filtered.SelectMany(kv => kv.Value.Select(v =>
+                new KeyValuePair<string, string?>(kv.Key, v))));
+    }
     await next();
 });
 
