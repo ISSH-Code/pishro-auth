@@ -60,6 +60,18 @@ public class ClaimsEnrichmentService(
                         claims.Add(new Claim("hrms_access", "true"));
                     }
 
+                    // Second boolean claim: surfaces members.sensitive-data:read so
+                    // Hrms.SharedKernel.ICurrentUser.HasSensitiveAccess can drive the
+                    // MemberSerializer full-vs-masked projection. Same shrinkage rationale
+                    // as hrms_access — no per-permission claim explosion.
+                    var hasSensitiveAccess = rolesResponse.Permissions is { Length: > 0 } &&
+                        rolesResponse.Permissions.Any(p =>
+                            string.Equals(p, "members.sensitive-data:read", StringComparison.OrdinalIgnoreCase));
+                    if (hasSensitiveAccess)
+                    {
+                        claims.Add(new Claim("has_sensitive_access", "true"));
+                    }
+
                     if (rolesResponse.TenantId is not null)
                         claims.Add(new Claim("tenant_id", rolesResponse.TenantId.Value.ToString()));
 

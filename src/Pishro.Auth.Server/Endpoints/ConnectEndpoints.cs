@@ -230,6 +230,11 @@ public static class ConnectEndpoints
                 OpenIddictConstants.Destinations.IdentityToken
             ],
 
+            "has_sensitive_access" when principal.HasScope(RolesScope) => [
+                OpenIddictConstants.Destinations.AccessToken,
+                OpenIddictConstants.Destinations.IdentityToken
+            ],
+
             "vetting_status" when principal.HasScope(VettingStatusScope) || principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken
