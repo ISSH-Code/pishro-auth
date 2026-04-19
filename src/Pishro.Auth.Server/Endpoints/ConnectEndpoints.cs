@@ -35,8 +35,20 @@ public static class ConnectEndpoints
         var request = httpContext.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
 
+        // When the client requests prompt=login we MUST drop any existing
+        // cookie session and re-authenticate — otherwise a fresh login flow
+        // (invite handoff, step-up auth, etc.) silently reuses whoever's
+        // already signed in on this browser and issues them the new token.
+        var forceLogin = request.HasPromptValue(OpenIddictConstants.PromptValues.Login);
+        if (forceLogin)
+        {
+            await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        }
+
         // Check if user is authenticated via cookie
-        var cookieResult = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var cookieResult = forceLogin
+            ? AuthenticateResult.NoResult()
+            : await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         if (!cookieResult.Succeeded || cookieResult.Principal is null)
         {
             // Redirect to login page with returnUrl
