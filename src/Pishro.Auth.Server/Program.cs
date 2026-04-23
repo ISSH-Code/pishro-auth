@@ -138,6 +138,7 @@ app.UseAuthorization();
 // Map endpoints
 app.MapAuthEndpoints();
 app.MapConnectEndpoints();
+app.MapAdminEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "pishro-auth" }));
 

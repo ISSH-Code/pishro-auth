@@ -247,6 +247,16 @@ public static class ConnectEndpoints
                 OpenIddictConstants.Destinations.IdentityToken
             ],
 
+            // Without this case, ClaimsEnrichmentService emits `full_access`
+            // into the ClaimsIdentity but OpenIddict strips it before signing
+            // the JWT. That's how this bug hid for weeks — the emission code
+            // looked right and the permissions list was correct, but the
+            // destinations whitelist defaulted to [] for unlisted claim types.
+            "full_access" when principal.HasScope(RolesScope) => [
+                OpenIddictConstants.Destinations.AccessToken,
+                OpenIddictConstants.Destinations.IdentityToken
+            ],
+
             "vetting_status" when principal.HasScope(VettingStatusScope) || principal.HasScope(RolesScope) => [
                 OpenIddictConstants.Destinations.AccessToken,
                 OpenIddictConstants.Destinations.IdentityToken

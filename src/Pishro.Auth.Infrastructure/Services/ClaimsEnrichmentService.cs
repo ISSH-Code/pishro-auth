@@ -72,6 +72,20 @@ public class ClaimsEnrichmentService(
                         claims.Add(new Claim("has_sensitive_access", "true"));
                     }
 
+                    // Third boolean claim: surfaces system.backoffice:full-access.
+                    // Replaces the four hardcoded "if role == super-admin" bypasses
+                    // in HRMS (DocumentAccessGuard, OrgUnitAccessChecker,
+                    // TenantQueryExtensions, OrgUnitEndpoints). Admins now grant
+                    // blanket access via this explicit permission instead of by
+                    // role name — read in code via ICurrentUser.HasFullAccess.
+                    var hasFullAccess = rolesResponse.Permissions is { Length: > 0 } &&
+                        rolesResponse.Permissions.Any(p =>
+                            string.Equals(p, "system.backoffice:full-access", StringComparison.OrdinalIgnoreCase));
+                    if (hasFullAccess)
+                    {
+                        claims.Add(new Claim("full_access", "true"));
+                    }
+
                     if (rolesResponse.TenantId is not null)
                         claims.Add(new Claim("tenant_id", rolesResponse.TenantId.Value.ToString()));
 
