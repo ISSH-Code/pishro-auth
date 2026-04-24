@@ -23,8 +23,15 @@ services:
         condition: service_healthy
     environment:
       ConnectionStrings__AuthDb: "Host=auth-db;Port=5432;Database=pishro_auth;Username=auth;Password=auth_dev_password"
-      Fido2__ServerDomain: "auth.pishro.party"
+      # RP ID is the registrable parent domain so the same passkey works
+      # at auth.pishro.party (registration), portal.pishro.party (applicant
+      # messaging) and erp.pishro.party (admin messaging). Per WebAuthn
+      # spec, credentials registered with rpId=pishro.party are usable
+      # from any subdomain whose effectiveDomain is a descendant.
+      Fido2__ServerDomain: "pishro.party"
       Fido2__Origins__0: "https://auth.pishro.party"
+      Fido2__Origins__1: "https://portal.pishro.party"
+      Fido2__Origins__2: "https://erp.pishro.party"
     ports:
       - "127.0.0.1:5300:8080"
 
