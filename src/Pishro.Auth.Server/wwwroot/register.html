@@ -191,19 +191,6 @@
                 const beginData = await beginRes.json();
                 if (!beginRes.ok) throw new Error(beginData.error || 'Failed to begin registration');
 
-                // Opt this credential in to the PRF extension at creation
-                // time. Many authenticators only honor PRF at assertion
-                // if it was also requested here. An empty object asks the
-                // RP to enable PRF without evaluating it now — the per-
-                // app eval happens later in lib/e2e/prf.ts (there the
-                // salt is a proper ArrayBuffer, which is what WebAuthn
-                // actually expects; passing a base64 string here would be
-                // silently rejected by some authenticators).
-                beginData.options.extensions = {
-                    ...(beginData.options.extensions || {}),
-                    prf: {}
-                };
-
                 // WebAuthn
                 const attestationResponse = await startRegistration({ optionsJSON: beginData.options });
 
