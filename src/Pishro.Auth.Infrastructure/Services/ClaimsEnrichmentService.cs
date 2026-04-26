@@ -16,7 +16,7 @@ public class ClaimsEnrichmentService(
     IConfiguration configuration,
     ILogger<ClaimsEnrichmentService> logger) : IClaimsEnrichmentService
 {
-    private record RolesResponse(string[] Roles, string? VettingStatus, Guid? TenantId, string[]? Permissions);
+    private record RolesResponse(string[] Roles, string? VettingStatus, Guid[]? TenantIds, string[]? Permissions);
     private record VettingStatusResponse(string VettingStatus);
 
     public async Task<IReadOnlyList<Claim>> GetEnrichedClaimsAsync(Guid userId, CancellationToken ct = default)
@@ -86,8 +86,11 @@ public class ClaimsEnrichmentService(
                         claims.Add(new Claim("full_access", "true"));
                     }
 
-                    if (rolesResponse.TenantId is not null)
-                        claims.Add(new Claim("tenant_id", rolesResponse.TenantId.Value.ToString()));
+                    // HRMS reads `tenant_ids` (plural, comma-separated) via
+                    // CurrentUser.TenantIds. The IAM internal endpoint returns
+                    // a `tenantIds` array — preserve that shape end-to-end.
+                    if (rolesResponse.TenantIds is { Length: > 0 })
+                        claims.Add(new Claim("tenant_ids", string.Join(",", rolesResponse.TenantIds)));
 
                     if (!string.IsNullOrEmpty(rolesResponse.VettingStatus))
                         claims.Add(new Claim("vetting_status", rolesResponse.VettingStatus));

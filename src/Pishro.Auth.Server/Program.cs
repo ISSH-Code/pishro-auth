@@ -39,6 +39,22 @@ builder.Services.AddOpenIddict()
         options.AddDevelopmentEncryptionCertificate()
                .AddDevelopmentSigningCertificate();
 
+        // OpenIddict encrypts access tokens by default (JWE). Resource
+        // servers (HRMS gateway, etc.) only do signature validation
+        // against the JWKS — they can't decrypt JWE. Switch tokens to
+        // unencrypted signed JWTs so any service can validate them.
+        // Reference tokens for the introspection endpoint stay
+        // encrypted; only browser-bound access tokens are affected.
+        options.DisableAccessTokenEncryption();
+
+        // Default access-token lifetime is 20 minutes — too short for an
+        // active backoffice session; users hit silent 401s mid-flow.
+        // 8 hours covers a working day. Refresh-token rotation is the
+        // longer-term answer; for now, longer access tokens unblock the
+        // immediate UX without weakening signature trust.
+        options.SetAccessTokenLifetime(TimeSpan.FromHours(8));
+        options.SetIdentityTokenLifetime(TimeSpan.FromHours(8));
+
         options.UseAspNetCore()
                .EnableAuthorizationEndpointPassthrough()
                .EnableTokenEndpointPassthrough()

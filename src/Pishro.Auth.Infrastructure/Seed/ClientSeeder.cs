@@ -32,36 +32,46 @@ public class ClientSeeder(
         }
 
         // Portal client
-        if (await manager.FindByClientIdAsync("portal", ct) is null)
+        // Portal client — rewritten on every startup (same pattern as hrms
+        // below) so PostLogoutRedirectUris and permission edits actually
+        // take effect rather than getting stuck on the seed-time set.
+        var portalDescriptor = new OpenIddictApplicationDescriptor
         {
-            await manager.CreateAsync(new OpenIddictApplicationDescriptor
+            ClientId = "portal",
+            DisplayName = "Civic Compass Portal",
+            ClientType = OpenIddictConstants.ClientTypes.Public,
+            RedirectUris =
             {
-                ClientId = "portal",
-                DisplayName = "Civic Compass Portal",
-                ClientType = OpenIddictConstants.ClientTypes.Public,
-                RedirectUris =
-                {
-                    new Uri("https://portal.pishro.party/api/auth/callback"),
-                    new Uri("http://localhost:3100/api/auth/callback")
-                },
-                Permissions =
-                {
-                    OpenIddictConstants.Permissions.Endpoints.Authorization,
-                    OpenIddictConstants.Permissions.Endpoints.Token,
-                    OpenIddictConstants.Permissions.Endpoints.EndSession,
-                    OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
-                    OpenIddictConstants.Permissions.ResponseTypes.Code,
-                    OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
-                    OpenIddictConstants.Permissions.Scopes.Profile,
-                    OpenIddictConstants.Permissions.Scopes.Email,
-                    OpenIddictConstants.Permissions.Scopes.Phone
-                },
-                Requirements =
-                {
-                    OpenIddictConstants.Requirements.Features.ProofKeyForCodeExchange
-                }
-            }, ct);
-        }
+                new Uri("https://portal.pishro.party/api/auth/callback"),
+                new Uri("http://localhost:3100/api/auth/callback"),
+            },
+            PostLogoutRedirectUris =
+            {
+                new Uri("https://portal.pishro.party/"),
+                new Uri("http://localhost:3100/"),
+            },
+            Permissions =
+            {
+                OpenIddictConstants.Permissions.Endpoints.Authorization,
+                OpenIddictConstants.Permissions.Endpoints.Token,
+                OpenIddictConstants.Permissions.Endpoints.EndSession,
+                OpenIddictConstants.Permissions.GrantTypes.AuthorizationCode,
+                OpenIddictConstants.Permissions.ResponseTypes.Code,
+                OpenIddictConstants.Permissions.Prefixes.Scope + OpenIddictConstants.Scopes.OpenId,
+                OpenIddictConstants.Permissions.Scopes.Profile,
+                OpenIddictConstants.Permissions.Scopes.Email,
+                OpenIddictConstants.Permissions.Scopes.Phone,
+            },
+            Requirements =
+            {
+                OpenIddictConstants.Requirements.Features.ProofKeyForCodeExchange,
+            },
+        };
+        var existingPortal = await manager.FindByClientIdAsync("portal", ct);
+        if (existingPortal is null)
+            await manager.CreateAsync(portalDescriptor, ct);
+        else
+            await manager.UpdateAsync(existingPortal, portalDescriptor, ct);
 
         // HRMS client (includes roles + vetting_status scopes for authorization).
         // The client descriptor is rewritten on every startup so permission/scope

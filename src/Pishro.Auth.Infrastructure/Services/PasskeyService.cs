@@ -42,7 +42,14 @@ public class PasskeyService(
         var challengeId = Guid.NewGuid().ToString();
         var optionsJson = options.ToJson();
 
-        // Store userId alongside options so we can create the user on completion
+        // Inject WebAuthn PRF extension — required so the same passkey can later
+        // derive E2E messaging keys without registering a second credential.
+        // Authenticators that do not support PRF (e.g. Samsung Pass as of 2026)
+        // will return clientExtensionResults.prf.enabled=false and we reject in
+        // CompleteRegisterAsync.
+        var optionsForBrowser = InjectPrfRegistrationExtension(optionsJson);
+
+        // Store the original (unmodified) options for FIDO2 validation.
         var payload = JsonSerializer.Serialize(new { optionsJson, userId = effectiveUserId, displayName });
         await cache.SetStringAsync(
             RegisterPrefix + challengeId,
@@ -50,7 +57,41 @@ public class PasskeyService(
             new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ChallengeExpiry },
             ct);
 
-        return new { challengeId, options };
+        using var browserDoc = JsonDocument.Parse(optionsForBrowser);
+        return new { challengeId, options = browserDoc.RootElement.Clone() };
+    }
+
+    private static bool IsPrfEnabled(JsonElement attestationElement)
+    {
+        if (!attestationElement.TryGetProperty("clientExtensionResults", out var ext))
+            return false;
+        if (ext.ValueKind != JsonValueKind.Object)
+            return false;
+        if (!ext.TryGetProperty("prf", out var prf) || prf.ValueKind != JsonValueKind.Object)
+            return false;
+        if (!prf.TryGetProperty("enabled", out var enabled))
+            return false;
+        return enabled.ValueKind == JsonValueKind.True;
+    }
+
+    private static string InjectPrfRegistrationExtension(string optionsJson)
+    {
+        using var doc = JsonDocument.Parse(optionsJson);
+        var dict = new Dictionary<string, JsonElement>();
+        foreach (var prop in doc.RootElement.EnumerateObject())
+            dict[prop.Name] = prop.Value.Clone();
+
+        var extensions = new Dictionary<string, JsonElement>();
+        if (dict.TryGetValue("extensions", out var existing) && existing.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in existing.EnumerateObject())
+                extensions[prop.Name] = prop.Value.Clone();
+        }
+        // {} signals the browser to enable PRF on the new credential.
+        extensions["prf"] = JsonSerializer.SerializeToElement(new { });
+        dict["extensions"] = JsonSerializer.SerializeToElement(extensions);
+
+        return JsonSerializer.Serialize(dict);
     }
 
     public async Task<AuthResult> CompleteRegisterAsync(JsonElement request, CancellationToken ct)
@@ -89,6 +130,19 @@ public class PasskeyService(
 
         if (attestationResponse is null)
             return new AuthResult(false, null, "Empty attestation response");
+
+        // Reject authenticators that do not support the WebAuthn PRF extension.
+        // Without PRF, the same credential cannot derive E2E messaging keys, so
+        // the user would end up needing two passkeys (one to log in, another to
+        // unlock messages) — which contradicts the platform's single-key UX.
+        if (!IsPrfEnabled(attestationElement))
+        {
+            return new AuthResult(false, null,
+                "این کلید برای استفاده در پیشرو پشتیبانی نمی‌شود زیرا قابلیت PRF (مورد نیاز برای پیام‌رسانی امن) را ندارد. " +
+                "لطفاً از یکی از این کلیدها استفاده کنید: Google Password Manager (Chrome on Android 14+)، " +
+                "iOS / iPadOS / macOS Passkeys (iOS 18+)، یا یک کلید سخت‌افزاری مانند YubiKey 5 Series. " +
+                "Samsung Pass در حال حاضر قابلیت PRF را پشتیبانی نمی‌کند.");
+        }
 
         try
         {

@@ -51,8 +51,14 @@ public static class ConnectEndpoints
             : await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         if (!cookieResult.Succeeded || cookieResult.Principal is null)
         {
-            // Redirect to login page with returnUrl
-            var returnUrl = httpContext.Request.PathBase + httpContext.Request.Path + httpContext.Request.QueryString;
+            // Redirect to login page with returnUrl. Strip `prompt=login`
+            // before storing it on the returnUrl: once the user completes
+            // the passkey login below and lands back here, having
+            // `prompt=login` still attached would re-trigger SignOutAsync
+            // and wipe the cookie we just set — endless redirect loop.
+            var path = httpContext.Request.PathBase + httpContext.Request.Path;
+            var query = StripPromptLogin(httpContext.Request.Query);
+            var returnUrl = path + query;
             return Results.Redirect($"/login.html?returnUrl={Uri.EscapeDataString(returnUrl)}");
         }
 
@@ -196,6 +202,37 @@ public static class ConnectEndpoints
         return Results.SignOut(
             null,
             [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]);
+    }
+
+    /// <summary>
+    /// Rebuild the query string with the `prompt=login` parameter removed.
+    /// Used by the authorize handler to avoid an infinite SignOut loop
+    /// once the user has completed the passkey re-auth.
+    /// </summary>
+    private static string StripPromptLogin(IQueryCollection query)
+    {
+        var kept = new List<string>();
+        foreach (var (key, values) in query)
+        {
+            if (string.Equals(key, "prompt", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var v in values)
+                {
+                    if (string.IsNullOrEmpty(v)) continue;
+                    var filtered = string.Join(' ',
+                        v.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                         .Where(p => !string.Equals(p, "login", StringComparison.OrdinalIgnoreCase)));
+                    if (!string.IsNullOrWhiteSpace(filtered))
+                        kept.Add($"{Uri.EscapeDataString(key)}={Uri.EscapeDataString(filtered)}");
+                }
+            }
+            else
+            {
+                foreach (var v in values)
+                    kept.Add($"{Uri.EscapeDataString(key)}={Uri.EscapeDataString(v ?? string.Empty)}");
+            }
+        }
+        return kept.Count == 0 ? string.Empty : "?" + string.Join('&', kept);
     }
 
     private static ImmutableArray<string> GetDestinations(Claim claim, ClaimsPrincipal principal)
